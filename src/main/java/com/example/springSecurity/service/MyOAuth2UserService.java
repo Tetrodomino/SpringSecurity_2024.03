@@ -1,5 +1,7 @@
 package com.example.springSecurity.service;
 
+import java.util.Map;
+
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
@@ -21,8 +23,8 @@ public class MyOAuth2UserService extends DefaultOAuth2UserService {
 	private final BCryptPasswordEncoder bCryptPasswordEncoder;
 
 	// provider(구글, 깃허브 등)로부터 받은 userRequest 데이터에 대해 후처리하는 메소드
-	@SuppressWarnings("unused")
 	@Override
+	@SuppressWarnings({ "unchecked", "rawtypes" }) 
 	public OAuth2User loadUser(OAuth2UserRequest userRequest) throws OAuth2AuthenticationException {
 		String uid, email, uname, picture;
 		String hashedPwd = bCryptPasswordEncoder.encode("Social Login");
@@ -75,8 +77,49 @@ public class MyOAuth2UserService extends DefaultOAuth2UserService {
 			
 			break;
 		case "naver":
+			Map<String, Object> response = (Map) oAuth2User.getAttribute("response");
+			String nid = (String) response.get("id");
+			uid = provider + "_" + nid;
+			
+			securityUser = securityService.getUserByUid(uid);
+			
+			if (securityUser == null) {
+				uname = (String) response.get("nickname");
+				uname = (uname == null) ? "naver_user" : uname;
+				email = (String) response.get("email");
+				picture = (String) response.get("profile_image");
+				securityUser = SecurityUser.builder()
+						.uid(uid).pwd(hashedPwd).uname(uname).email(email)
+						.picture(picture).provider(provider)
+						.build();
+				securityService.insertSecurityUser(securityUser);
+				securityUser = securityService.getUserByUid(uid);
+				log.info("네이버 계정을 통해 회원가입이 되었습니다: " + securityUser);
+			}
+			
 			break;
 		case "kakao":
+			long kid = (long) oAuth2User.getAttribute("id");
+			uid = provider + "_" + kid;
+			
+			securityUser = securityService.getUserByUid(uid);
+			
+			if (securityUser == null) {
+				Map<String, String> properties = (Map) oAuth2User.getAttribute("properties");
+				//Map<String, String> account = (Map) oAuth2User.getAttribute("kakao_account");
+				
+				uname = (String) properties.get("nickname");
+				uname = (uname == null) ? "kakao_user" : uname;
+				//email = (String) account.get("email");
+				picture = (String) properties.get("profile_image");
+				securityUser = SecurityUser.builder()
+						.uid(uid).pwd(hashedPwd).uname(uname)
+						.picture(picture).provider(provider)
+						.build();
+				securityService.insertSecurityUser(securityUser);
+				securityUser = securityService.getUserByUid(uid);
+				log.info("카카오 계정을 통해 회원가입이 되었습니다: " + securityUser);
+			}
 			break;
 		}
 		
